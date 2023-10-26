@@ -15,6 +15,7 @@ find_package(cv_bridge REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(nlohmann_json REQUIRED)
+find_package(object_detection_interfaces REQUIRED)
 
 include_directories(SYSTEM 
   ${OpenCV_INCLUDE_DIRS}
@@ -39,7 +40,7 @@ install(TARGETS
 install(DIRECTORY
   launch
   config
-  DESTINATION share/object_detection/
+  DESTINATION share/${PROJECT_NAME}/
 )
 
 ament_python_install_package(${PROJECT_NAME})
