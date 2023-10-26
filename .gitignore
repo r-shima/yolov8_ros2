@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+*.so
+.vscode
+object_detection/config.json
