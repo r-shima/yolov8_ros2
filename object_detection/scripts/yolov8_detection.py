@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
 
+"""
+PUBLISHER:
+    + /detection_results (object_detection_interfaces/msg/DetectionResult) - A list of detections
+
+PARAMETER:
+    + rtsp_url (string) - RTSP URL of the IP camera
+"""
+
 import os
 import json
 from ament_index_python.packages import get_package_prefix
@@ -10,8 +18,14 @@ from object_detection_interfaces.msg import ObjectDetection, DetectionResult
 from ultralytics import YOLO
 
 class YOLOv8Detection(Node):
+    """
+    This node runs YOLOv8 object detection on video streams
+    """
 
     def __init__(self):
+        """
+        Initializes the node, declares parameters, creates publisher, and loads the YOLO model
+        """
         super().__init__('yolov8_detection')
         package_prefix_directory = get_package_prefix('object_detection')
         weights_path = os.path.join(package_prefix_directory, 'lib', 'object_detection',
@@ -36,6 +50,14 @@ class YOLOv8Detection(Node):
         self.timer = self.create_timer(1 / self.frequency, self.timer_callback)
 
     def publish_detections(self, results):
+        """
+        Publish the detected objects as messages to a ROS topic.
+
+        Args: results: A list of detection results, where each result contains bounding box
+                       coordinates, confidence, and class information
+
+        Returns: None
+        """
         detection_msg = DetectionResult()
 
         for result in results:
@@ -62,11 +84,21 @@ class YOLOv8Detection(Node):
         self.detection_pub.publish(detection_msg)
     
     def timer_callback(self):
+        """
+        Callback function for the timer. Detection results are visualized and published.
+
+        Args: None
+
+        Returns: None
+        """
         for result in self.results:
             result.plot()
             self.publish_detections(result)
 
 def main(args=None):
+    """
+    The main function
+    """
     rclpy.init(args=args)
     node = YOLOv8Detection()
     rclpy.spin(node)
