@@ -39,14 +39,14 @@ install(TARGETS
 
 install(DIRECTORY
   launch
-  config
   DESTINATION share/${PROJECT_NAME}/
 )
 
 ament_python_install_package(${PROJECT_NAME})
  
 install(PROGRAMS
-  scripts/yolov8_detection.py
+  scripts/yolov8_ip_camera.py
+  scripts/yolov8_realsense.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
