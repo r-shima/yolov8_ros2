@@ -4,7 +4,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image, CompressedImage, CameraInfo
 from cv_bridge import CvBridge
-from std_msgs.msg import String
+from geometry_msgs.msg import Point
 import os
 from ament_index_python.packages import get_package_prefix
 import cv2
@@ -16,7 +16,8 @@ class YOLOv8RealSense(Node):
     def __init__(self):
         super().__init__('yolov8_realsense')
         self.bridge = CvBridge()
-        self.detection_pub = self.create_publisher(String, 'detected_objects', 10)
+        self.door_pub = self.create_publisher(Point, 'door', 10)
+        self.table_pub = self.create_publisher(Point, 'table', 10)
         self.color_sub = self.create_subscription(
             CompressedImage,
             '/camera/infra1/image_rect_raw/compressed',
@@ -42,6 +43,9 @@ class YOLOv8RealSense(Node):
         weights_path = os.path.join(package_prefix_directory, 'lib', 'object_detection',
                                     'doors_and_tables.pt')
         self.model = YOLO(weights_path)
+
+        self.door = Point()
+        self.table = Point()
 
         self.grayscale_image = None
         self.depth_image = None
@@ -86,20 +90,37 @@ class YOLOv8RealSense(Node):
         for result in results:
             boxes = result.boxes
             for box in boxes:
-                # Get bounding box coordinates in (top, left, bottom, right) format
-                b = box.xyxy[0].to('cpu').detach().numpy().copy()
-                
-                # Get the class value
-                c = box.cls
+                # Get the confidence value
+                confidence = box.conf
 
-                # Get depth and calculate real world coordinates
-                depth = self.depth_image[int((b[1] + b[3]) / 2), int((b[0] + b[2]) / 2)]
-                coords = rs.rs2_deproject_pixel_to_point(self.intrinsics,
-                                                         [int((b[0] + b[2]) / 2),
-                                                          int((b[1] + b[3]) / 2)], depth)
+                # Check if the confidence value is at least 0.7
+                if confidence >= 0.7:
+                    # Get bounding box coordinates in (top, left, bottom, right) format
+                    b = box.xyxy[0].to('cpu').detach().numpy().copy()
+                    
+                    # Get the class value
+                    c = box.cls
 
-                detection_info = f"Object: {self.model.names[int(c)]}, Coordinates: {coords}"
-                self.detection_pub.publish(String(data=detection_info))
+                    # Get depth and calculate real world coordinates
+                    depth = self.depth_image[int((b[1] + b[3]) / 2), int((b[0] + b[2]) / 2)]
+                    coords = rs.rs2_deproject_pixel_to_point(self.intrinsics,
+                                                            [int((b[0] + b[2]) / 2),
+                                                            int((b[1] + b[3]) / 2)], depth)
+
+                    if coords != [0.0, 0.0, 0.0]:
+                        depth_scale = 0.001
+
+                        # Publish object's position relative to the camera frame
+                        if self.model.names[int(c)] == 'door':
+                            self.door.x = coords[0] * depth_scale
+                            self.door.y = coords[1] * depth_scale
+                            self.door.z = coords[2] * depth_scale
+                            self.door_pub.publish(self.door)
+                        if self.model.names[int(c)] == 'table':
+                            self.table.x = coords[0] * depth_scale
+                            self.table.y = coords[1] * depth_scale
+                            self.table.z = coords[2] * depth_scale
+                            self.table_pub.publish(self.table)
 
         annotated_frame = results[0].plot()
         cv2.imshow("grayscale_image", annotated_frame)
