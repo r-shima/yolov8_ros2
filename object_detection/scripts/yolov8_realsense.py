@@ -1,5 +1,19 @@
 #!/usr/bin/env python3
 
+"""
+PUBLISHERS:
+    + /door (geometry_msgs/msg/Point) - The 3D coordinates of detected door
+    + /table (geometry_msgs/msg/Point) - The 3D coordinates of detected table
+
+SUBSCRIBERS:
+    + /camera/infra1/image_rect_raw/compressed (sensor_msgs/msg/CompressedImage) - The compressed
+                                                                                   infrared image
+                                                                                   stream
+    + /camera/depth/image_rect_raw (sensor_msgs/msg/Image) - The raw rectified depth images
+    + /camera/infra1/camera_info (sensor_msgs/msg/CameraInfo) - The camera's metadata and
+                                                                calibration information
+"""
+
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image, CompressedImage, CameraInfo
@@ -12,8 +26,14 @@ import pyrealsense2 as rs
 from ultralytics import YOLO
 
 class YOLOv8RealSense(Node):
+    """
+    This node runs YOLOv8 object detection on RealSense camera streams
+    """
 
     def __init__(self):
+        """
+        Initializes the node, creates publishers and subscribers, and loads the YOLO model
+        """
         super().__init__('yolov8_realsense')
         self.bridge = CvBridge()
         self.door_pub = self.create_publisher(Point, 'door', 10)
@@ -52,6 +72,13 @@ class YOLOv8RealSense(Node):
         self.intrinsics = None
 
     def camera_info_callback(self, msg):
+        """
+        Callback function for the subscriber that subscribes to /camera/infra1/camera_info
+        
+        Args: msg: Message containing camera metadata and calibration info
+
+        Returns: None
+        """
         # Set up intrinsic parameters
         self.intrinsics = rs.intrinsics()
         self.intrinsics.width = msg.width
@@ -70,6 +97,14 @@ class YOLOv8RealSense(Node):
         self.intrinsics.coeffs = [i for i in msg.d]
 
     def grayscale_callback(self, msg):
+        """
+        Callback function for the subscriber that subscribes to
+        /camera/infra1/image_rect_raw/compressed. Processes and stores the incoming image.
+        
+        Args: msg: Incoming message containing the compressed grayscale image
+
+        Returns: None
+        """
         grayscale_image = self.bridge.compressed_imgmsg_to_cv2(msg)
 
         # Rotate the image 90 degrees counterclockwise
@@ -79,12 +114,28 @@ class YOLOv8RealSense(Node):
         self.grayscale_image = cv2.cvtColor(self.grayscale_image, cv2.COLOR_GRAY2BGR)
 
     def depth_callback(self, msg):
+        """
+        Callback function for the subscriber that subscribes to /camera/depth/image_rect_raw.
+        Processes and stores the incoming image.
+        
+        Args: msg: Incoming message containing the depth image
+
+        Returns: None
+        """
         depth_image = self.bridge.imgmsg_to_cv2(msg)
 
         # Rotate the image 90 degrees counterclockwise
         self.depth_image = cv2.rotate(depth_image, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
     def process_images(self):
+        """
+        Processes the incoming images for object detection and publishes the detected objects'
+        positions
+
+        Args: None
+
+        Returns: None
+        """
         results = self.model(self.grayscale_image, verbose=False)
 
         for result in results:
@@ -105,7 +156,7 @@ class YOLOv8RealSense(Node):
                     depth = self.depth_image[int((b[1] + b[3]) / 2), int((b[0] + b[2]) / 2)]
                     coords = rs.rs2_deproject_pixel_to_point(self.intrinsics,
                                                             [int((b[0] + b[2]) / 2),
-                                                            int((b[1] + b[3]) / 2)], depth)
+                                                             int((b[1] + b[3]) / 2)], depth)
 
                     if coords != [0.0, 0.0, 0.0]:
                         depth_scale = 0.001
@@ -127,11 +178,22 @@ class YOLOv8RealSense(Node):
         cv2.waitKey(1)
 
     def timer_callback(self):
+        """
+        Callback function for the timer. Performs object detection and publishes whenever new
+        images are available.
+
+        Args: None
+
+        Returns: None
+        """
         if self.grayscale_image is not None and self.depth_image is not None and \
             self.intrinsics is not None:
             self.process_images()
 
 def main(args=None):
+    """
+    The main function
+    """
     rclpy.init(args=args)
     node = YOLOv8RealSense()
     rclpy.spin(node)

@@ -51,7 +51,7 @@ class YOLOv8IPCamera(Node):
 
     def publish_detections(self, results):
         """
-        Publish the detected objects as messages to a ROS topic
+        Publishes the detected objects as messages to a ROS topic
 
         Args: results: A list of detection results, where each result contains bounding box
                        coordinates, confidence, and class information
