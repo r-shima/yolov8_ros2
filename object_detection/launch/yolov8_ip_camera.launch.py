@@ -6,7 +6,7 @@ def generate_launch_description():
     return LaunchDescription([
         Node(
             package='object_detection',
-            executable='yolov8_detection.py',
-            name='yolov8_detection'
+            executable='yolov8_ip_camera.py',
+            name='yolov8_ip_camera'
         )
     ])

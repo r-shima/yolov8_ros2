@@ -39,8 +39,8 @@ class YOLOv8RealSense(Node):
         self.door_pub = self.create_publisher(Point, 'door', 10)
         self.table_pub = self.create_publisher(Point, 'table', 10)
         self.color_sub = self.create_subscription(
-            CompressedImage,
-            '/camera/infra1/image_rect_raw/compressed',
+            Image,
+            '/camera/infra1/image_rect_raw',
             self.grayscale_callback,
             10)
 
@@ -105,7 +105,7 @@ class YOLOv8RealSense(Node):
 
         Returns: None
         """
-        grayscale_image = self.bridge.compressed_imgmsg_to_cv2(msg)
+        grayscale_image = self.bridge.imgmsg_to_cv2(msg)
 
         # Rotate the image 90 degrees counterclockwise
         self.grayscale_image = cv2.rotate(grayscale_image, cv2.ROTATE_90_COUNTERCLOCKWISE)
