@@ -18,7 +18,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image, CameraInfo
 from cv_bridge import CvBridge
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import PointStamped
 import os
 from ament_index_python.packages import get_package_prefix
 import cv2
@@ -36,8 +36,8 @@ class YOLOv8RealSense(Node):
         """
         super().__init__('yolov8_realsense')
         self.bridge = CvBridge()
-        self.door_pub = self.create_publisher(Point, 'door', 10)
-        self.table_pub = self.create_publisher(Point, 'table', 10)
+        self.door_pub = self.create_publisher(PointStamped, 'door', 10)
+        self.table_pub = self.create_publisher(PointStamped, 'table', 10)
         self.color_sub = self.create_subscription(
             Image,
             '/camera/infra1/image_rect_raw',
@@ -63,9 +63,6 @@ class YOLOv8RealSense(Node):
         weights_path = os.path.join(package_prefix_directory, 'lib', 'object_detection',
                                     'doors_and_tables.pt')
         self.model = YOLO(weights_path)
-
-        self.door = Point()
-        self.table = Point()
 
         self.grayscale_image = None
         self.depth_image = None
@@ -138,6 +135,9 @@ class YOLOv8RealSense(Node):
         """
         results = self.model(self.grayscale_image, verbose=False)
 
+        # Get the current time to use as the timestamp for detections
+        current_time = self.get_clock().now().to_msg()
+
         for result in results:
             boxes = result.boxes
             for box in boxes:
@@ -161,18 +161,25 @@ class YOLOv8RealSense(Node):
                     if coords != [0.0, 0.0, 0.0]:
                         depth_scale = 0.001
 
+                        object_position = PointStamped()
+                        object_position.header.stamp = current_time
+                        object_position.header.frame_id = 'camera_link'
+
+                        # RealSense z becomes ROS x
+                        object_position.point.x = coords[2] * depth_scale
+
+                        # RealSense y becomes ROS y
+                        object_position.point.y = coords[1] * depth_scale
+
+                        # RealSense x becomes negative ROS z
+                        object_position.point.z = -coords[0] * depth_scale
+
                         # Publish object's position relative to the camera frame
                         if self.model.names[int(c)] == 'door':
-                            self.door.x = coords[2] * depth_scale  # RealSense z becomes ROS x
-                            self.door.y = -coords[0] * depth_scale # RealSense x becomes ROS y
-                            self.door.z = -coords[1] * depth_scale # RealSense y becomes ROS z
-                            self.door_pub.publish(self.door)
+                            self.door_pub.publish(object_position)
 
                         if self.model.names[int(c)] == 'table':
-                            self.table.x = coords[2] * depth_scale  # RealSense z becomes ROS x
-                            self.table.y = -coords[0] * depth_scale # RealSense x becomes ROS y
-                            self.table.z = -coords[1] * depth_scale # RealSense y becomes ROS z
-                            self.table_pub.publish(self.table)
+                            self.table_pub.publish(object_position)
 
         annotated_frame = results[0].plot()
         cv2.imshow("grayscale_image", annotated_frame)
