@@ -16,7 +16,7 @@ SUBSCRIBERS:
 
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image, CompressedImage, CameraInfo
+from sensor_msgs.msg import Image, CameraInfo
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Point
 import os
@@ -99,9 +99,9 @@ class YOLOv8RealSense(Node):
     def grayscale_callback(self, msg):
         """
         Callback function for the subscriber that subscribes to
-        /camera/infra1/image_rect_raw/compressed. Processes and stores the incoming image.
+        /camera/infra1/image_rect_raw. Processes and stores the incoming image.
         
-        Args: msg: Incoming message containing the compressed grayscale image
+        Args: msg: Incoming message containing the grayscale image
 
         Returns: None
         """
@@ -163,14 +163,15 @@ class YOLOv8RealSense(Node):
 
                         # Publish object's position relative to the camera frame
                         if self.model.names[int(c)] == 'door':
-                            self.door.x = coords[0] * depth_scale
-                            self.door.y = coords[1] * depth_scale
-                            self.door.z = coords[2] * depth_scale
+                            self.door.x = coords[2] * depth_scale  # RealSense z becomes ROS x
+                            self.door.y = -coords[0] * depth_scale # RealSense x becomes ROS y
+                            self.door.z = -coords[1] * depth_scale # RealSense y becomes ROS z
                             self.door_pub.publish(self.door)
+
                         if self.model.names[int(c)] == 'table':
-                            self.table.x = coords[0] * depth_scale
-                            self.table.y = coords[1] * depth_scale
-                            self.table.z = coords[2] * depth_scale
+                            self.table.x = coords[2] * depth_scale  # RealSense z becomes ROS x
+                            self.table.y = -coords[0] * depth_scale # RealSense x becomes ROS y
+                            self.table.z = -coords[1] * depth_scale # RealSense y becomes ROS z
                             self.table_pub.publish(self.table)
 
         annotated_frame = results[0].plot()
