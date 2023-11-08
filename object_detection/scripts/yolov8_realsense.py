@@ -24,6 +24,7 @@ from ament_index_python.packages import get_package_prefix
 import cv2
 import pyrealsense2 as rs
 from ultralytics import YOLO
+import numpy as np
 
 class YOLOv8RealSense(Node):
     """
@@ -124,6 +125,67 @@ class YOLOv8RealSense(Node):
         # Rotate the image 90 degrees counterclockwise
         self.depth_image = cv2.rotate(depth_image, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
+    # def process_images(self):
+    #     """
+    #     Processes the incoming images for object detection and publishes the detected objects'
+    #     positions
+
+    #     Args: None
+
+    #     Returns: None
+    #     """
+    #     results = self.model(self.grayscale_image, verbose=False)
+
+    #     # Get the current time to use as the timestamp for detections
+    #     current_time = self.get_clock().now().to_msg()
+
+    #     for result in results:
+    #         boxes = result.boxes
+    #         for box in boxes:
+    #             # Get the confidence value
+    #             confidence = box.conf
+
+    #             # Check if the confidence value is at least 0.7
+    #             if confidence >= 0.7:
+    #                 # Get bounding box coordinates in (top, left, bottom, right) format
+    #                 b = box.xyxy[0].to('cpu').detach().numpy().copy()
+                    
+    #                 # Get the class value
+    #                 c = box.cls
+
+    #                 # Get depth and calculate real world coordinates
+    #                 depth = self.depth_image[int((b[1] + b[3]) / 2), int((b[0] + b[2]) / 2)]
+    #                 coords = rs.rs2_deproject_pixel_to_point(self.intrinsics,
+    #                                                         [int((b[0] + b[2]) / 2),
+    #                                                          int((b[1] + b[3]) / 2)], depth)
+
+    #                 if coords != [0.0, 0.0, 0.0]:
+    #                     depth_scale = 0.001
+
+    #                     object_position = PointStamped()
+    #                     object_position.header.stamp = current_time
+    #                     object_position.header.frame_id = 'camera_link'
+
+    #                     # RealSense z becomes ROS x
+    #                     object_position.point.x = coords[2] * depth_scale
+
+    #                     # RealSense y becomes ROS y
+    #                     object_position.point.y = coords[1] * depth_scale
+
+    #                     # RealSense x becomes negative ROS z
+    #                     object_position.point.z = -coords[0] * depth_scale
+
+    #                     # Publish object's position relative to the camera frame
+    #                     if self.model.names[int(c)] == 'door':
+    #                         self.door_pub.publish(object_position)
+
+    #                     if self.model.names[int(c)] == 'table':
+    #                         self.table_pub.publish(object_position)
+
+    #     annotated_frame = results[0].plot()
+    #     cv2.imshow("grayscale_image", annotated_frame)
+    #     cv2.waitKey(1)
+
     def process_images(self):
         """
         Processes the incoming images for object detection and publishes the detected objects'
@@ -147,18 +209,30 @@ class YOLOv8RealSense(Node):
                 # Check if the confidence value is at least 0.7
                 if confidence >= 0.7:
                     # Get bounding box coordinates in (top, left, bottom, right) format
-                    b = box.xyxy[0].to('cpu').detach().numpy().copy()
-                    
-                    # Get the class value
-                    c = box.cls
+                    bbox = box.xyxy[0].to('cpu').detach().numpy().copy()
 
-                    # Get depth and calculate real world coordinates
-                    depth = self.depth_image[int((b[1] + b[3]) / 2), int((b[0] + b[2]) / 2)]
-                    coords = rs.rs2_deproject_pixel_to_point(self.intrinsics,
-                                                            [int((b[0] + b[2]) / 2),
-                                                             int((b[1] + b[3]) / 2)], depth)
+                    # Calculate the center of the bounding box
+                    bbox_center = [int((bbox[0] + bbox[2]) / 2), int((bbox[1] + bbox[3]) / 2)]
 
-                    if coords != [0.0, 0.0, 0.0]:
+                    # Extract the depth values within the bounding box
+                    depth_region = self.depth_image[int(bbox[1]):int(bbox[3]),
+                                                    int(bbox[0]):int(bbox[2])]
+
+                    # Filter out zero depth values
+                    non_zero_depths = depth_region[depth_region != 0]
+
+                    # Calculate the average depth within the bounding box
+                    if non_zero_depths.size > 0:
+                        average_depth = np.mean(non_zero_depths)
+                    else:
+                        average_depth = 0
+
+                    if average_depth != 0:
+                        # Calculate real world coordinates using the average depth
+                        coords = rs.rs2_deproject_pixel_to_point(
+                            self.intrinsics, bbox_center, average_depth
+                        )
+
                         depth_scale = 0.001
 
                         object_position = PointStamped()
@@ -175,16 +249,16 @@ class YOLOv8RealSense(Node):
                         object_position.point.z = -coords[0] * depth_scale
 
                         # Publish object's position relative to the camera frame
-                        if self.model.names[int(c)] == 'door':
+                        if self.model.names[int(box.cls)] == 'door':
                             self.door_pub.publish(object_position)
 
-                        if self.model.names[int(c)] == 'table':
+                        if self.model.names[int(box.cls)] == 'table':
                             self.table_pub.publish(object_position)
 
         annotated_frame = results[0].plot()
         cv2.imshow("grayscale_image", annotated_frame)
         cv2.waitKey(1)
-
+    
     def timer_callback(self):
         """
         Callback function for the timer. Performs object detection and publishes whenever new
