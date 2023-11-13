@@ -39,7 +39,7 @@ class YOLOv8RealSense(Node):
         self.bridge = CvBridge()
         self.door_pub = self.create_publisher(PointStamped, 'door', 10)
         self.table_pub = self.create_publisher(PointStamped, 'table', 10)
-        self.color_sub = self.create_subscription(
+        self.grayscale_sub = self.create_subscription(
             Image,
             '/camera/infra1/image_rect_raw',
             self.grayscale_callback,
@@ -56,7 +56,7 @@ class YOLOv8RealSense(Node):
             '/camera/infra1/camera_info',
             self.camera_info_callback,
             10)
-        self.frequency = 20
+        self.frequency = 30
         self.timer = self.create_timer(1 / self.frequency, self.timer_callback)
 
         # Load pre-trained weights
@@ -153,11 +153,18 @@ class YOLOv8RealSense(Node):
     #                 # Get the class value
     #                 c = box.cls
 
+    #                 # Calculate the center of the bounding box
+    #                 center_x = int((b[0] + b[2]) / 2)
+    #                 center_y = int((b[1] + b[3]) / 2)
+
+    #                 cv2.circle(self.grayscale_image, (center_x, center_y), radius=5,
+    #                            color=(0, 0, 255), thickness=-1)
+                    
     #                 # Get depth and calculate real world coordinates
-    #                 depth = self.depth_image[int((b[1] + b[3]) / 2), int((b[0] + b[2]) / 2)]
-    #                 coords = rs.rs2_deproject_pixel_to_point(self.intrinsics,
-    #                                                         [int((b[0] + b[2]) / 2),
-    #                                                          int((b[1] + b[3]) / 2)], depth)
+    #                 depth = self.depth_image[center_y, center_x]
+    #                 coords = rs.rs2_deproject_pixel_to_point(
+    #                     self.intrinsics, [center_x, center_y], depth
+    #                 )
 
     #                 if coords != [0.0, 0.0, 0.0]:
     #                     depth_scale = 0.001
@@ -214,6 +221,9 @@ class YOLOv8RealSense(Node):
                     # Calculate the center of the bounding box
                     bbox_center = [int((bbox[0] + bbox[2]) / 2), int((bbox[1] + bbox[3]) / 2)]
 
+                    cv2.circle(self.grayscale_image, (bbox_center[0], bbox_center[1]), radius=5,
+                               color=(0, 0, 255), thickness=-1)
+
                     # Extract the depth values within the bounding box
                     depth_region = self.depth_image[int(bbox[1]):int(bbox[3]),
                                                     int(bbox[0]):int(bbox[2])]
@@ -221,16 +231,16 @@ class YOLOv8RealSense(Node):
                     # Filter out zero depth values
                     non_zero_depths = depth_region[depth_region != 0]
 
-                    # Calculate the average depth within the bounding box
+                    # Calculate the median depth within the bounding box
                     if non_zero_depths.size > 0:
-                        average_depth = np.mean(non_zero_depths)
+                        median_depth = np.median(non_zero_depths)
                     else:
-                        average_depth = 0
+                        median_depth = 0
 
-                    if average_depth != 0:
-                        # Calculate real world coordinates using the average depth
+                    if median_depth != 0:
+                        # Calculate real world coordinates
                         coords = rs.rs2_deproject_pixel_to_point(
-                            self.intrinsics, bbox_center, average_depth
+                            self.intrinsics, bbox_center, median_depth
                         )
 
                         depth_scale = 0.001
