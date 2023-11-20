@@ -56,7 +56,7 @@ class YOLOv8RealSense(Node):
             '/camera/infra1/camera_info',
             self.camera_info_callback,
             10)
-        self.frequency = 30
+        self.frequency = 200
         self.timer = self.create_timer(1 / self.frequency, self.timer_callback)
 
         # Load pre-trained weights
@@ -79,12 +79,12 @@ class YOLOv8RealSense(Node):
         """
         # Set up intrinsic parameters
         self.intrinsics = rs.intrinsics()
-        self.intrinsics.width = msg.width
-        self.intrinsics.height = msg.height
-        self.intrinsics.ppx = msg.k[2]
-        self.intrinsics.ppy = msg.k[5]
-        self.intrinsics.fx = msg.k[0]
-        self.intrinsics.fy = msg.k[4]
+        self.intrinsics.width = msg.height
+        self.intrinsics.height = msg.width
+        self.intrinsics.ppx = msg.k[5]
+        self.intrinsics.ppy = msg.width - msg.k[2]
+        self.intrinsics.fx = msg.k[4]
+        self.intrinsics.fy = msg.k[0]
 
         # Set distortion model and coefficients
         if msg.distortion_model == 'plumb_bob':
@@ -125,74 +125,6 @@ class YOLOv8RealSense(Node):
         # Rotate the image 90 degrees counterclockwise
         self.depth_image = cv2.rotate(depth_image, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
-    # def process_images(self):
-    #     """
-    #     Processes the incoming images for object detection and publishes the detected objects'
-    #     positions
-
-    #     Args: None
-
-    #     Returns: None
-    #     """
-    #     results = self.model(self.grayscale_image, verbose=False)
-
-    #     # Get the current time to use as the timestamp for detections
-    #     current_time = self.get_clock().now().to_msg()
-
-    #     for result in results:
-    #         boxes = result.boxes
-    #         for box in boxes:
-    #             # Get the confidence value
-    #             confidence = box.conf
-
-    #             # Check if the confidence value is at least 0.7
-    #             if confidence >= 0.7:
-    #                 # Get bounding box coordinates in (top, left, bottom, right) format
-    #                 b = box.xyxy[0].to('cpu').detach().numpy().copy()
-                    
-    #                 # Get the class value
-    #                 c = box.cls
-
-    #                 # Calculate the center of the bounding box
-    #                 center_x = int((b[0] + b[2]) / 2)
-    #                 center_y = int((b[1] + b[3]) / 2)
-
-    #                 cv2.circle(self.grayscale_image, (center_x, center_y), radius=5,
-    #                            color=(0, 0, 255), thickness=-1)
-                    
-    #                 # Get depth and calculate real world coordinates
-    #                 depth = self.depth_image[center_y, center_x]
-    #                 coords = rs.rs2_deproject_pixel_to_point(
-    #                     self.intrinsics, [center_x, center_y], depth
-    #                 )
-
-    #                 if coords != [0.0, 0.0, 0.0]:
-    #                     depth_scale = 0.001
-
-    #                     object_position = PointStamped()
-    #                     object_position.header.stamp = current_time
-    #                     object_position.header.frame_id = 'camera_link'
-
-    #                     # RealSense z becomes ROS x
-    #                     object_position.point.x = coords[2] * depth_scale
-
-    #                     # RealSense y becomes ROS y
-    #                     object_position.point.y = coords[1] * depth_scale
-
-    #                     # RealSense x becomes negative ROS z
-    #                     object_position.point.z = -coords[0] * depth_scale
-
-    #                     # Publish object's position relative to the camera frame
-    #                     if self.model.names[int(c)] == 'door':
-    #                         self.door_pub.publish(object_position)
-
-    #                     if self.model.names[int(c)] == 'table':
-    #                         self.table_pub.publish(object_position)
-
-    #     annotated_frame = results[0].plot()
-    #     cv2.imshow("grayscale_image", annotated_frame)
-    #     cv2.waitKey(1)
-
     def process_images(self):
         """
         Processes the incoming images for object detection and publishes the detected objects'
@@ -221,6 +153,7 @@ class YOLOv8RealSense(Node):
                     # Calculate the center of the bounding box
                     bbox_center = [int((bbox[0] + bbox[2]) / 2), int((bbox[1] + bbox[3]) / 2)]
 
+                    # Draw a circle at the center of the bounding box
                     cv2.circle(self.grayscale_image, (bbox_center[0], bbox_center[1]), radius=5,
                                color=(0, 0, 255), thickness=-1)
 
@@ -247,18 +180,12 @@ class YOLOv8RealSense(Node):
 
                         object_position = PointStamped()
                         object_position.header.stamp = current_time
-                        object_position.header.frame_id = 'camera_link'
-
-                        # RealSense z becomes ROS x
-                        object_position.point.x = coords[2] * depth_scale
-
-                        # RealSense y becomes ROS y
+                        object_position.header.frame_id = 'camera_infra1_optical_frame'
+                        object_position.point.x = coords[0] * depth_scale
                         object_position.point.y = coords[1] * depth_scale
+                        object_position.point.z = coords[2] * depth_scale
 
-                        # RealSense x becomes negative ROS z
-                        object_position.point.z = -coords[0] * depth_scale
-
-                        # Publish object's position relative to the camera frame
+                        # Publish object's position relative to the camera optical frame
                         if self.model.names[int(box.cls)] == 'door':
                             self.door_pub.publish(object_position)
 
