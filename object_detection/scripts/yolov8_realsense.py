@@ -145,8 +145,8 @@ class YOLOv8RealSense(Node):
                 # Get the confidence value
                 confidence = box.conf
 
-                # Check if the confidence value is at least 0.7
-                if confidence >= 0.7:
+                # Check if the confidence value is at least 0.8
+                if confidence >= 0.8:
                     # Get bounding box coordinates in (top, left, bottom, right) format
                     bbox = box.xyxy[0].to('cpu').detach().numpy().copy()
 
