@@ -19,3 +19,6 @@ Replace `<username>`, `<password>`, and `<ip_address>` with your camera's actual
 ## Packages
 * [object_detection](https://github.com/r-shima/yolov8_ros2/tree/main/object_detection): This package performs object detection
 * [object_detection_interfaces](https://github.com/r-shima/yolov8_ros2/tree/main/object_detection_interfaces): This package defines custom messages relevant to object detection using the IP camera
+## Demo
+
+[Alt-Text](https://github.com/r-shima/yolov8_ros2/assets/113070827/6938fc33-072d-46d5-b4a3-9c8699909954)
